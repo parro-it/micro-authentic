@@ -1,20 +1,35 @@
 var crypto = require('crypto')
-var ulevel = require('ix-level-userdb')
-var level = require('level')
 
-var Users = module.exports = function (db) {
-  if (!(this instanceof Users)) return new Users(db)
+var Users = module.exports = function () {
+  if (!(this instanceof Users)) return new Users()
 
-  var adapted = typeof db === 'string' ? createLevelDB(db) : this.adaptDB(db)
-  this.db = ulevel(adapted)
+  this.db = this.adaptDB(require('./test/_fake-db'))
 
   return this
 }
 
 Users.prototype.adaptDB = function (dbObj) {
   return {
-    get: function (keys, cb) {
-      var key = keys.split('user:')[1]
+    checkPassword: (email, pass, cb) => {
+      cb(null, true)
+    },
+    findUser: function (username, cb) {
+      this.get(username, cb)
+    },
+    modifyUser (username, data, cb) {
+      this.put(username, data, cb)
+    },
+    addUser: function (username, password, data, cb) {
+      const createdDate = new Date()
+      this.put(username, {
+        username,
+        email: username,
+        password,
+        data,
+        createdDate
+      }, cb)
+    },
+    get: function (key, cb) {
       dbObj.get(key, function (err, val) {
         if (err) return cb(err)
         if (val === undefined) {
@@ -22,11 +37,11 @@ Users.prototype.adaptDB = function (dbObj) {
           err.notFound = true
           err.status = 404
         }
+        if (!val) val = {data: {}}
         cb(err, val)
       })
     },
-    put: function (keys, val, cb) {
-      var key = keys.split('user:')[1]
+    put: function (key, val, cb) {
       dbObj.put(key, val, cb)
     }
   }
@@ -206,6 +221,3 @@ function validPassword (password) {
   return password.length >= 6
 }
 
-function createLevelDB (location) {
-  return level(location, {valueEncoding: 'json'})
-}

@@ -41,10 +41,6 @@ module.exports = function (opts) {
 }
 
 function checkInitErrors (opts) {
-  if (!opts.db) {
-    throw new Error('Authentic: no db given, must have "get" and "put" methods.')
-  }
-
   if (!opts.publicKey || !opts.privateKey) {
     throw new Error('Authentic: no public or private key given')
   }

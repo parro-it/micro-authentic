@@ -1,22 +1,23 @@
 var fs = require('fs')
 var http = require('http')
-var tape = require('tape')
+var test = require('ava')
 var servertest = require('servertest')
 
 var Authentic = require('../')
 
-var db = require('./fake-db')
-var Users = require('../users')(db)
+var Users = require('../users')()
 
-var publicKey = fs.readFileSync(__dirname + '/rsa-public.pem')
-var privateKey = fs.readFileSync(__dirname + '/rsa-private.pem')
+var publicKey = fs.readFileSync(__dirname + '/fixtures/rsa-public.pem')
+var privateKey = fs.readFileSync(__dirname + '/fixtures/rsa-private.pem')
 
-var Tokens = require('../tokens')({publicKey: publicKey, privateKey: privateKey})
+var Tokens = require('../tokens')({
+  publicKey: publicKey,
+  privateKey: privateKey
+})
 
 var lastEmail
 
 var auth = Authentic({
-  db: db,
   publicKey: publicKey,
   privateKey: privateKey,
   sendEmail: function (email, cb) {
@@ -25,7 +26,7 @@ var auth = Authentic({
   }
 })
 
-tape('Auth: should get public-key', function (t) {
+test('Auth: should get public-key', function (t) {
   var url = '/auth/public-key'
   var opts = { method: 'GET' }
 
@@ -40,7 +41,7 @@ tape('Auth: should get public-key', function (t) {
   })
 })
 
-tape('Auth: Signup: should be able to sign up', function (t) {
+test('Auth: Signup: should be able to sign up', function (t) {
   var postData = {email: 'david@scalehaus.io', password: 'swordfish', confirmUrl: 'http://example.com/confirm'}
 
   post('/auth/signup', postData, function (err, res) {
@@ -58,7 +59,7 @@ tape('Auth: Signup: should be able to sign up', function (t) {
   })
 })
 
-tape('Auth: Login: should fail without confirm', function (t) {
+test('Auth: Login: should fail without confirm', function (t) {
   var postData = {email: 'david@scalehaus.io', password: 'swordfish'}
 
   post('/auth/login', postData, function (err, res) {
@@ -67,7 +68,6 @@ tape('Auth: Login: should fail without confirm', function (t) {
     t.equal(res.statusCode, 401)
 
     var data = JSON.parse(res.body)
-    console.log('data', data)
     t.equal(data.success, false, 'should not succeed')
     t.equal(data.error, 'User Not Confirmed', 'should have error')
 
@@ -75,7 +75,7 @@ tape('Auth: Login: should fail without confirm', function (t) {
   })
 })
 
-tape('Auth: Signup: sendEmail should get email options', function (t) {
+test('Auth: Signup: sendEmail should get email options', function (t) {
   var postData = {
     email: 'email@scalehaus.io',
     password: 'swordfish',
@@ -98,7 +98,7 @@ tape('Auth: Signup: sendEmail should get email options', function (t) {
   })
 })
 
-tape('Auth: Signup: should error for existing user', function (t) {
+test('Auth: Signup: should error for existing user', function (t) {
   var postData = {email: 'david@scalehaus.io', password: 'swordfish', confirmUrl: 'http://example.com/confirm'}
 
   post('/auth/signup', postData, function (err, res) {
@@ -114,7 +114,7 @@ tape('Auth: Signup: should error for existing user', function (t) {
   })
 })
 
-tape('Auth: Confirm: should error for mismatch', function (t) {
+test('Auth: Confirm: should error for mismatch', function (t) {
   var postData = {email: 'david@scalehaus.io', confirmToken: 'incorrect'}
 
   post('/auth/confirm', postData, function (err, res) {
@@ -130,37 +130,39 @@ tape('Auth: Confirm: should error for mismatch', function (t) {
   })
 })
 
-tape('Auth: Confirm: should confirm user', function (t) {
-  Users.findUser('david@scalehaus.io', function (err, user) {
-    t.ifError(err, 'should not error')
-
-    var postData = {
-      email: 'david@scalehaus.io',
-      confirmToken: user.data.confirmToken
-    }
-
-    post('/auth/confirm', postData, function (err, res) {
+test('Auth: Confirm: should confirm user', function (t) {
+  Users.createUser('david@scalehaus.io', '', (err2, user) => {
+    Users.findUser('david@scalehaus.io', function (err, user) {
       t.ifError(err, 'should not error')
 
-      t.equal(res.statusCode, 202)
+      var postData = {
+        email: 'david@scalehaus.io',
+        confirmToken: user.data.confirmToken
+      }
 
-      var data = JSON.parse(res.body)
-      t.equal(data.success, true, 'should succeed')
-      t.equal(data.message, 'User confirmed.', 'should have message')
-
-      Tokens.decode(data.data.authToken, function (err, payload) {
+      post('/auth/confirm', postData, function (err, res) {
         t.ifError(err, 'should not error')
 
-        t.equal(payload.email, 'david@scalehaus.io', 'payload should have email')
-        t.ok(payload.iat, 'should have iat')
+        t.equal(res.statusCode, 202)
 
-        t.end()
+        var data = JSON.parse(res.body)
+        t.equal(data.success, true, 'should succeed')
+        t.equal(data.message, 'User confirmed.', 'should have message')
+
+        Tokens.decode(data.data.authToken, function (err, payload) {
+          t.ifError(err, 'should not error')
+
+          t.equal(payload.email, 'david@scalehaus.io', 'payload should have email')
+          t.ok(payload.iat, 'should have iat')
+
+          t.end()
+        })
       })
     })
   })
 })
 
-tape('Auth: Login: should error for unknown user', function (t) {
+test('Auth: Login: should error for unknown user', function (t) {
   var postData = {
     email: 'notdavid@scalehaus.io',
     password: 'not swordfish'
@@ -179,7 +181,7 @@ tape('Auth: Login: should error for unknown user', function (t) {
   })
 })
 
-tape('Auth: Login: should error for wrong pass', function (t) {
+test('Auth: Login: should error for wrong pass', function (t) {
   var postData = {
     email: 'david@scalehaus.io',
     password: 'not swordfish'
@@ -198,33 +200,37 @@ tape('Auth: Login: should error for wrong pass', function (t) {
   })
 })
 
-tape('Auth: Login: should login', function (t) {
-  var postData = {
-    email: 'david@scalehaus.io',
-    password: 'swordfish'
-  }
+test('Auth: Login: should login', function (t) {
+  Users.createUser('david@scalehaus.io', 'swordfish', (err2, user) => {
+    Users.confirmUser('david@scalehaus.io', user.confirmToken, (err3) => {
+      var postData = {
+        email: 'david@scalehaus.io',
+        password: 'swordfish'
+      }
 
-  post('/auth/login', postData, function (err, res) {
-    t.ifError(err, 'should not error')
+      post('/auth/login', postData, function (err, res) {
+        t.ifError(err, 'should not error')
 
-    t.equal(res.statusCode, 202)
+        t.equal(res.statusCode, 202)
 
-    var data = JSON.parse(res.body)
-    t.equal(data.success, true, 'should succeed', 'should succeed')
-    t.equal(data.message, 'Login successful.', 'should have message')
+        var data = JSON.parse(res.body)
+        t.equal(data.success, true, 'should succeed', 'should succeed')
+        t.equal(data.message, 'Login successful.', 'should have message')
 
-    Tokens.decode(data.data.authToken, function (err, payload) {
-      t.ifError(err, 'should not error')
+        Tokens.decode(data.data.authToken, function (err, payload) {
+          t.ifError(err, 'should not error')
 
-      t.equal(payload.email, 'david@scalehaus.io', 'payload should have email')
-      t.ok(payload.iat, 'should have iat')
-      t.ok(payload.exp, 'should have exp')
-      t.end()
+          t.equal(payload.email, 'david@scalehaus.io', 'payload should have email')
+          t.ok(payload.iat, 'should have iat')
+          t.ok(payload.exp, 'should have exp')
+          t.end()
+        })
+      })
     })
   })
 })
 
-tape('Auth: Change Password Request', function (t) {
+test('Auth: Change Password Request', function (t) {
   var postData = {email: 'david@scalehaus.io', changeUrl: 'http://example.com/change'}
 
   post('/auth/change-password-request', postData, function (err, res) {
@@ -235,20 +241,21 @@ tape('Auth: Change Password Request', function (t) {
     var data = JSON.parse(res.body)
     t.ok(data.success, 'should succeed')
     t.equal(data.message, 'Change password request received. Check email for confirmation link.')
+    Users.createUser('david@scalehaus.io', '', (err2, user) => {
+      Users.findUser(postData.email, function (err, user) {
+        t.ifError(err, 'should not error')
 
-    Users.findUser(postData.email, function (err, user) {
-      t.ifError(err, 'should not error')
+        t.equal(user.data.emailConfirmed, true, 'email should be confirmed')
+        t.equal(user.data.changeToken.length, 60, 'should have change token')
+        t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
 
-      t.equal(user.data.emailConfirmed, true, 'email should be confirmed')
-      t.equal(user.data.changeToken.length, 60, 'should have change token')
-      t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
-
-      t.end()
+        t.end()
+      })
     })
   })
 })
 
-tape('Auth: Change Password Request should fix case', function (t) {
+test('Auth: Change Password Request should fix case', function (t) {
   var postData = {email: 'TitleCase24@scalehaus.io', changeUrl: 'http://example.com/change'}
 
   post('/auth/change-password-request', postData, function (err, res) {
@@ -259,23 +266,24 @@ tape('Auth: Change Password Request should fix case', function (t) {
     var data = JSON.parse(res.body)
     t.ok(data.success, 'should succeed')
     t.equal(data.message, 'Change password request received. Check email for confirmation link.')
+    Users.createUser('david@scalehaus.io', '', (err2, user) => {
+      Users.findUser(postData.email.toLowerCase(), function (err, user) {
+        t.ifError(err, 'should not error')
 
-    Users.findUser(postData.email.toLowerCase(), function (err, user) {
-      t.ifError(err, 'should not error')
+        t.equal(user.data.emailConfirmed, true, 'email should be confirmed')
+        t.equal(user.data.changeToken.length, 60, 'should have change token')
+        t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
 
-      t.equal(user.data.emailConfirmed, true, 'email should be confirmed')
-      t.equal(user.data.changeToken.length, 60, 'should have change token')
-      t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
-
-      t.end()
+        t.end()
+      })
     })
   })
 })
 
-tape('Auth: Change Password Request: will create confirmed user', function (t) {
+test('Auth: Change Password Request: will create confirmed user', t => {
   var postData = {email: 'unknownuser@scalehaus.io', changeUrl: 'http://example.com/change'}
 
-  post('/auth/change-password-request', postData, function (err, res) {
+  post('/auth/change-password-request', postData, (err, res) => {
     t.ifError(err, 'should not error')
 
     t.equal(res.statusCode, 200)
@@ -284,19 +292,21 @@ tape('Auth: Change Password Request: will create confirmed user', function (t) {
     t.ok(data.success, 'should succeed')
     t.equal(data.message, 'Change password request received. Check email for confirmation link.')
 
-    Users.findUser(postData.email, function (err, user) {
-      t.ifError(err, 'should not error')
+    Users.createUser(postData.email, '', (err2, user2) => {
+      Users.findUser(postData.email, function (err, user) {
+        t.ifError(err, 'should not error')
 
-      t.equal(user.data.emailConfirmed, true, 'email should be confirmed')
-      t.equal(user.data.changeToken.length, 60, 'should have change token')
-      t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
+        t.equal(user.data.emailConfirmed, true, 'email should be confirmed')
+        t.equal(user.data.changeToken.length, 60, 'should have change token')
+        t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
 
-      t.end()
+        t.end()
+      })
     })
   })
 })
 
-tape('Auth: Change Password Request: sendEmail should get email options', function (t) {
+test('Auth: Change Password Request: sendEmail should get email options', function (t) {
   var postData = {
     email: 'email@scalehaus.io',
     changeUrl: 'http://example.com/change',
@@ -317,7 +327,7 @@ tape('Auth: Change Password Request: sendEmail should get email options', functi
   })
 })
 
-tape('Auth: Change Password: should error with wrong token', function (t) {
+test('Auth: Change Password: should error with wrong token', function (t) {
   var postData = {
     email: 'david@scalehaus.io',
     changeToken: 'wrong token',
@@ -338,38 +348,40 @@ tape('Auth: Change Password: should error with wrong token', function (t) {
   })
 })
 
-tape('Auth: Change Password: should change password and login', function (t) {
-  Users.findUser('david@scalehaus.io', function (err, user) {
-    t.ifError(err, 'should not error')
-
-    var postData = {
-      email: 'david@scalehaus.io',
-      changeToken: user.data.changeToken,
-      password: 'newpass'
-    }
-
-    post('/auth/change-password', postData, function (err, res) {
+test('Auth: Change Password: should change password and login', function (t) {
+  Users.createUser('david@scalehaus.io', '', (err2, user) => {
+    Users.findUser('david@scalehaus.io', function (err, user) {
       t.ifError(err, 'should not error')
 
-      t.equal(res.statusCode, 200)
+      var postData = {
+        email: 'david@scalehaus.io',
+        changeToken: user.data.changeToken,
+        password: 'newpass'
+      }
 
-      var data = JSON.parse(res.body)
-      t.equal(data.success, true, 'should succeed')
-      t.equal(data.message, 'Password changed.', 'should have message')
-
-      Tokens.decode(data.data.authToken, function (err, payload) {
+      post('/auth/change-password', postData, function (err, res) {
         t.ifError(err, 'should not error')
 
-        t.equal(payload.email, 'david@scalehaus.io', 'payload should have email')
-        t.ok(payload.iat, 'should have iat')
-        t.ok(payload.exp, 'should have exp')
-        t.end()
+        t.equal(res.statusCode, 200)
+
+        var data = JSON.parse(res.body)
+        t.equal(data.success, true, 'should succeed')
+        t.equal(data.message, 'Password changed.', 'should have message')
+
+        Tokens.decode(data.data.authToken, function (err, payload) {
+          t.ifError(err, 'should not error')
+
+          t.equal(payload.email, 'david@scalehaus.io', 'payload should have email')
+          t.ok(payload.iat, 'should have iat')
+          t.ok(payload.exp, 'should have exp')
+          t.end()
+        })
       })
     })
   })
 })
 
-tape('Auth: Change Password: should error with expired token', function (t) {
+test('Auth: Change Password: should error with expired token', function (t) {
   var postData = {
     email: 'david@scalehaus.io',
     changeToken: 'expired token',

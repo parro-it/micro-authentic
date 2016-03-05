@@ -1,17 +1,16 @@
 {
-  "name": "authentic-server",
-  "version": "0.4.2",
-  "description": "This is the server component of Authentic. This provides endpoints for signup, login, confirm, and password change.",
-  "main": "index.js",
+  "name": "micro-authentic",
+  "version": "1.0.0",
+  "description": "Adaptation of authentic-serverthat work with micro.",
   "scripts": {
     "test": "node test/index.js && standard"
   },
   "keywords": [
-    "authentic",
+    "micro",
     "authentication",
     "jwt"
   ],
-  "author": "David Guttman <david@guttman.io> (http://davidguttman.com/)",
+  "author": "Andrea Parodi",
   "license": "MIT",
   "dependencies": {
     "body": "^5.1.0",
@@ -27,16 +26,5 @@
     "standard": "^5.3.1",
     "tape": "^4.2.2"
   },
-  "directories": {
-    "example": "example",
-    "test": "test"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/davidguttman/authentic-server.git"
-  },
-  "bugs": {
-    "url": "https://github.com/davidguttman/authentic-server/issues"
-  },
-  "homepage": "https://github.com/davidguttman/authentic-server#readme"
+  "repository": "parro-it/micro-authentic"
 }

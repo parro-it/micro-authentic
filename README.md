@@ -1,6 +1,8 @@
-# AuthenticServer #
+# Micro Authentic #
 
-This is the server component of [authentic](https://github.com/davidguttman/authentic). This provides endpoints for signup, login, confirm, and password change.
+Adaptation of [authentic-server](https://github.com/davidguttman/authentic-server.git) that work with [micro](https://github.com/zeithq/micro).
+
+[authentic-server](https://github.com/davidguttman/authentic-server.git) is the server component of [authentic](https://github.com/davidguttman/authentic). It provides endpoints for signup, login, confirm, and password change.
 
 ## Example ##
 
@@ -32,7 +34,7 @@ console.log('Authentic enabled server listening on port', 1337)
 ## Installation ##
 
 ```
-npm install --save authentic-server
+npm install --save micro-authentic
 ```
 
 ## Module API ##

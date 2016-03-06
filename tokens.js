@@ -21,3 +21,12 @@ Tokens.prototype.encode = function (email) {
 Tokens.prototype.decode = function (token, cb) {
   jwt.verify(token, this.publicKey, {algorithms: ['RS256']}, cb)
 }
+
+Tokens.prototype.decodeAsync = function (token) {
+  return new Promise((resolve, reject) => {
+    this.decode(token, (err, res) => {
+      if (err) return reject(err)
+      resolve(res)
+    })
+  })
+}

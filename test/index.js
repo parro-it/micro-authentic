@@ -1,3 +1,5 @@
+import 'babel-register'
+
 var fs = require('fs')
 var http = require('http')
 var test = require('ava')
@@ -5,8 +7,9 @@ var servertest = require('servertest')
 
 var Authentic = require('../')
 
-var Users = require('../users')()
+import UsersClass from '../users'
 
+const Users = new UsersClass()
 var publicKey = fs.readFileSync(__dirname + '/fixtures/rsa-public.pem')
 var privateKey = fs.readFileSync(__dirname + '/fixtures/rsa-private.pem')
 
@@ -15,7 +18,7 @@ var Tokens = require('../tokens')({
   privateKey: privateKey
 })
 
-var lastEmail
+let lastEmail
 
 var auth = Authentic({
   publicKey: publicKey,
@@ -26,56 +29,97 @@ var auth = Authentic({
   }
 })
 
-test('Auth: should get public-key', function (t) {
-  var url = '/auth/public-key'
-  var opts = { method: 'GET' }
+function createServer (auth) {
+  return http.createServer(auth)
+}
 
-  servertest(createServer(auth), url, opts, function (err, res) {
-    t.ifError(err, 'should not error')
-    var data = JSON.parse(res.body)
+function post (url, data) {
+  const opts = {
+    method: 'POST',
+    headers: {'content-type': 'application/json'}
+  }
 
-    t.equal(data.success, true, 'should succeed')
-    t.equal(data.data.publicKey.length, 800, 'should have publicKey')
+  return new Promise( (resolve, reject) => {
+    servertest(
+      createServer(auth),
+      url,
+      opts,
+      (err, res) => {
+        if (err) return reject(err)
+        resolve(res)
+      }
+    ).end(JSON.stringify(data))
+  });
 
-    t.end()
-  })
+}
+
+function get (url) {
+  const opts = { method: 'GET' }
+
+  return new Promise( (resolve, reject) => {
+    servertest(
+      createServer(auth),
+      url,
+      opts,
+      (err, res) => {
+        if (err) return reject(err)
+        resolve(res)
+      }
+    )
+  });
+
+}
+
+test('Auth: should get public-key', async (t) => {
+  const res = await get('/auth/public-key')
+  const data = JSON.parse(res.body)
+
+  t.is(data.success, true, 'should succeed')
+  t.is(data.data.publicKey.length, 800, 'should have publicKey')
 })
 
-test('Auth: Signup: should be able to sign up', function (t) {
-  var postData = {email: 'david@scalehaus.io', password: 'swordfish', confirmUrl: 'http://example.com/confirm'}
+test('Auth: Signup: should be able to sign up', async (t) => {
+  var postData = {
+    email: 'david@scalehaus.io',
+    password: 'swordfish',
+    confirmUrl: 'http://example.com/confirm'
+  }
 
-  post('/auth/signup', postData, function (err, res) {
-    t.ifError(err, 'should not error')
+  const res = await post('/auth/signup', postData)
+  t.is(res.statusCode, 201)
 
-    t.equal(res.statusCode, 201)
+  var data = JSON.parse(res.body)
+  t.is(data.success, true, 'should succeed')
+  t.is(data.message, 'User created. Check email for confirmation link.', 'should have message')
+  t.is(data.data.email, 'david@scalehaus.io', 'should have email')
+  t.is(data.data.createdDate.length, 24, 'should have createdDate')
 
-    var data = JSON.parse(res.body)
-    t.equal(data.success, true, 'should succeed')
-    t.equal(data.message, 'User created. Check email for confirmation link.', 'should have message')
-    t.equal(data.data.email, 'david@scalehaus.io', 'should have email')
-    t.equal(data.data.createdDate.length, 24, 'should have createdDate')
-
-    t.end()
-  })
 })
 
-test('Auth: Login: should fail without confirm', function (t) {
-  var postData = {email: 'david@scalehaus.io', password: 'swordfish'}
 
-  post('/auth/login', postData, function (err, res) {
-    t.ifError(err, 'should not error')
 
-    t.equal(res.statusCode, 401)
+test('Auth: Login: should fail without confirm', async (t) => {
+  Users.reset()
+  var postData = {
+    email: '123david@scalehaus.io', password: 'swordfish'
+  }
 
-    var data = JSON.parse(res.body)
-    t.equal(data.success, false, 'should not succeed')
-    t.equal(data.error, 'User Not Confirmed', 'should have error')
+  const user2 = await Users.createUserAsync(
+    '123david@scalehaus.io',
+    'swordfish'
+  )
 
-    t.end()
-  })
+  const res = await post('/auth/login', postData)
+  t.is(res.statusCode, 401)
+
+  var data = JSON.parse(res.body)
+  t.is(data.success, false, 'should not succeed')
+  t.is(data.error, 'User Not Confirmed', 'should have error')
+
 })
 
-test('Auth: Signup: sendEmail should get email options', function (t) {
+
+test('Auth: Signup: sendEmail should get email options', async (t) => {
   var postData = {
     email: 'email@scalehaus.io',
     password: 'swordfish',
@@ -85,228 +129,256 @@ test('Auth: Signup: sendEmail should get email options', function (t) {
     html: '<h1>Welcome</h1><p><a href="{{confirmUrl}}">Confirm</a></p>'
   }
 
-  post('/auth/signup', postData, function (err, res) {
-    t.ifError(err, 'should not error')
-    t.equal(res.statusCode, 201)
+  const res = await post('/auth/signup', postData);
+  t.is(res.statusCode, 201)
 
-    t.notOk(lastEmail.password, 'should not have password')
-    t.equal(lastEmail.from, postData.from, 'should have from')
-    t.equal(lastEmail.subject, postData.subject, 'should have subject')
-    t.equal(lastEmail.html, postData.html, 'should have html')
+  t.notOk(lastEmail.password, 'should not have password')
+  t.is(lastEmail.from, postData.from, 'should have from')
+  t.is(lastEmail.subject, postData.subject, 'should have subject')
+  t.is(lastEmail.html, postData.html, 'should have html')
 
-    t.end()
-  })
 })
 
-test('Auth: Signup: should error for existing user', function (t) {
-  var postData = {email: 'david@scalehaus.io', password: 'swordfish', confirmUrl: 'http://example.com/confirm'}
+test('Auth: Signup: should error for existing user', async (t) => {
+  Users.reset()
 
-  post('/auth/signup', postData, function (err, res) {
-    t.ifError(err, 'should not error')
-
-    t.equal(res.statusCode, 400)
-
-    var data = JSON.parse(res.body)
-    t.notEqual(data.success, true, 'should not succeed')
-    t.equal(data.error, 'User Exists', 'should have error')
-
-    t.end()
-  })
-})
-
-test('Auth: Confirm: should error for mismatch', function (t) {
-  var postData = {email: 'david@scalehaus.io', confirmToken: 'incorrect'}
-
-  post('/auth/confirm', postData, function (err, res) {
-    t.ifError(err, 'should not error')
-
-    t.equal(res.statusCode, 401)
-
-    var data = JSON.parse(res.body)
-    t.equal(data.success, false, 'should not succeed')
-    t.equal(data.error, 'Token Mismatch')
-
-    t.end()
-  })
-})
-
-test('Auth: Confirm: should confirm user', function (t) {
-  Users.createUser('david@scalehaus.io', '', (err2, user) => {
-    Users.findUser('david@scalehaus.io', function (err, user) {
-      t.ifError(err, 'should not error')
-
-      var postData = {
-        email: 'david@scalehaus.io',
-        confirmToken: user.data.confirmToken
-      }
-
-      post('/auth/confirm', postData, function (err, res) {
-        t.ifError(err, 'should not error')
-
-        t.equal(res.statusCode, 202)
-
-        var data = JSON.parse(res.body)
-        t.equal(data.success, true, 'should succeed')
-        t.equal(data.message, 'User confirmed.', 'should have message')
-
-        Tokens.decode(data.data.authToken, function (err, payload) {
-          t.ifError(err, 'should not error')
-
-          t.equal(payload.email, 'david@scalehaus.io', 'payload should have email')
-          t.ok(payload.iat, 'should have iat')
-
-          t.end()
-        })
-      })
-    })
-  })
-})
-
-test('Auth: Login: should error for unknown user', function (t) {
+  await Users.createUserAsync(
+    'david@scalehaus.io',
+    'swordfish'
+  )
   var postData = {
-    email: 'notdavid@scalehaus.io',
+    email: 'david@scalehaus.io',
+    password: 'swordfish',
+    confirmUrl: 'http://example.com/confirm'
+  }
+
+  const res = await post('/auth/signup', postData)
+
+  t.is(res.statusCode, 400)
+
+  var data = JSON.parse(res.body)
+  t.not(data.success, true, 'should not succeed')
+  t.is(data.error, 'User Exists', 'should have error')
+
+})
+
+
+test('Auth: Confirm: should error for mismatch', async (t) => {
+  var postData = {
+    email: 'david@scalehaus.io',
+    confirmToken: 'incorrect'
+  }
+
+  const res = await post('/auth/confirm', postData)
+
+  t.is(res.statusCode, 401)
+
+  var data = JSON.parse(res.body)
+  t.is(data.success, false, 'should not succeed')
+  t.is(data.error, 'Token Mismatch')
+
+})
+
+
+
+test('Auth: Confirm: should confirm user', async (t) => {
+  Users.reset()
+  const user = await Users.createUserAsync(
+    '333david@scalehaus.io',
+    'fdsfdsfdfd'
+  )
+  var postData = {
+    email: '333david@scalehaus.io',
+    confirmToken: user.data.confirmToken
+  }
+
+  const res = await post('/auth/confirm', postData)
+
+  t.is(res.statusCode, 202)
+
+  var data = JSON.parse(res.body)
+  t.is(data.success, true, 'should succeed')
+  t.is(data.message, 'User confirmed.', 'should have message')
+  const payload = await Tokens.decodeAsync(data.data.authToken)
+  t.is(payload.email, '333david@scalehaus.io', 'payload should have email')
+  t.ok(payload.iat, 'should have iat')
+})
+
+
+
+test('Auth: Login: should error for unknown user', async (t) => {
+  Users.reset()
+
+  var postData = {
+    email: 'not--david@scalehaus.io',
     password: 'not swordfish'
   }
 
-  post('/auth/login', postData, function (err, res) {
-    t.ifError(err, 'should not error')
+  const res = await post('/auth/login', postData)
 
-    t.equal(res.statusCode, 401)
+  t.is(res.statusCode, 401)
 
-    var data = JSON.parse(res.body)
-    t.equal(data.success, false, 'should not succeed')
-    t.equal(data.error, 'User Not Found', 'should have error message')
-
-    t.end()
-  })
+  var data = JSON.parse(res.body)
+  t.is(data.success, false, 'should not succeed')
+  t.is(data.error, 'User Not Found', 'should have error message')
 })
 
-test('Auth: Login: should error for wrong pass', function (t) {
+
+test('Auth: Login: should error for wrong pass', async (t) => {
+  Users.reset()
   var postData = {
     email: 'david@scalehaus.io',
     password: 'not swordfish'
   }
+  const user = await Users.createUserAsync(
+    'david@scalehaus.io',
+    'swordfish'
+  )
 
-  post('/auth/login', postData, function (err, res) {
-    t.ifError(err, 'should not error')
+  await Users.confirmUserAsync(
+    'david@scalehaus.io',
+    user.data.confirmToken
+  )
 
-    t.equal(res.statusCode, 401)
+  const res = await post('/auth/login', postData)
 
-    var data = JSON.parse(res.body)
-    t.equal(data.success, false, 'should not succeed')
-    t.equal(data.error, 'Password Mismatch', 'should have error message')
+  t.is(res.statusCode, 401)
 
-    t.end()
-  })
+  var data = JSON.parse(res.body)
+  t.is(data.success, false, 'should not succeed')
+  t.is(data.error, 'Password Mismatch', 'should have error message')
+
 })
 
-test('Auth: Login: should login', function (t) {
-  Users.createUser('david@scalehaus.io', 'swordfish', (err2, user) => {
-    Users.confirmUser('david@scalehaus.io', user.confirmToken, (err3) => {
-      var postData = {
-        email: 'david@scalehaus.io',
-        password: 'swordfish'
-      }
 
-      post('/auth/login', postData, function (err, res) {
-        t.ifError(err, 'should not error')
 
-        t.equal(res.statusCode, 202)
+test('Auth: Login: should login', async (t) => {
+  Users.reset()
+  const user = await Users.createUserAsync(
+    'david@scalehaus.io',
+    'swordfish'
+  )
+  await Users.confirmUserAsync(
+    'david@scalehaus.io',
+    user.data.confirmToken
+  )
 
-        var data = JSON.parse(res.body)
-        t.equal(data.success, true, 'should succeed', 'should succeed')
-        t.equal(data.message, 'Login successful.', 'should have message')
+  var postData = {
+    email: 'david@scalehaus.io',
+    password: 'swordfish'
+  }
 
-        Tokens.decode(data.data.authToken, function (err, payload) {
-          t.ifError(err, 'should not error')
+  const res = await post('/auth/login', postData)
 
-          t.equal(payload.email, 'david@scalehaus.io', 'payload should have email')
-          t.ok(payload.iat, 'should have iat')
-          t.ok(payload.exp, 'should have exp')
-          t.end()
-        })
-      })
-    })
-  })
+  t.is(res.statusCode, 202)
+
+  var data = JSON.parse(res.body)
+  t.is(data.success, true, 'should succeed', 'should succeed')
+  t.is(data.message, 'Login successful.', 'should have message')
+
+  const payload = await Tokens.decodeAsync(data.data.authToken)
+
+  t.is(payload.email, 'david@scalehaus.io', 'payload should have email')
+  t.ok(payload.iat, 'should have iat')
+  t.ok(payload.exp, 'should have exp')
 })
 
-test('Auth: Change Password Request', function (t) {
-  var postData = {email: 'david@scalehaus.io', changeUrl: 'http://example.com/change'}
 
-  post('/auth/change-password-request', postData, function (err, res) {
-    t.ifError(err, 'should not error')
+test('Auth: Change Password Request', async (t) => {
+  var postData = {
+    email: 'david@scalehaus.io',
+    changeUrl: 'http://example.com/change'
+  }
+  Users.reset()
 
-    t.equal(res.statusCode, 200)
+  const user2 = await Users.createUserAsync('david@scalehaus.io', 'dsfdsfdsf345')
+  await Users.confirmUserAsync(
+    'david@scalehaus.io',
+    user2.data.confirmToken
+  )
 
-    var data = JSON.parse(res.body)
-    t.ok(data.success, 'should succeed')
-    t.equal(data.message, 'Change password request received. Check email for confirmation link.')
-    Users.createUser('david@scalehaus.io', '', (err2, user) => {
-      Users.findUser(postData.email, function (err, user) {
-        t.ifError(err, 'should not error')
+  const res = await post('/auth/change-password-request', postData)
 
-        t.equal(user.data.emailConfirmed, true, 'email should be confirmed')
-        t.equal(user.data.changeToken.length, 60, 'should have change token')
-        t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
+  t.is(res.statusCode, 200)
 
-        t.end()
-      })
-    })
-  })
+  var data = JSON.parse(res.body)
+  t.ok(data.success, 'should succeed')
+  t.is(data.message, 'Change password request received. Check email for confirmation link.')
+
+
+  const user = await Users.findUserAsync(postData.email)
+
+  t.is(user.data.emailConfirmed, true, 'email should be confirmed')
+  t.is(user.data.changeToken.length, 60, 'should have change token')
+  t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
+
 })
 
-test('Auth: Change Password Request should fix case', function (t) {
-  var postData = {email: 'TitleCase24@scalehaus.io', changeUrl: 'http://example.com/change'}
 
-  post('/auth/change-password-request', postData, function (err, res) {
-    t.ifError(err, 'should not error')
 
-    t.equal(res.statusCode, 200)
+test('Auth: Change Password Request should fix case', async (t) => {
+  var postData = {
+    email: 'TitleCase24@scalehaus.io',
+    changeUrl: 'http://example.com/change'
+  }
+  Users.reset()
 
-    var data = JSON.parse(res.body)
-    t.ok(data.success, 'should succeed')
-    t.equal(data.message, 'Change password request received. Check email for confirmation link.')
-    Users.createUser('david@scalehaus.io', '', (err2, user) => {
-      Users.findUser(postData.email.toLowerCase(), function (err, user) {
-        t.ifError(err, 'should not error')
+  const user2 = await Users.createUserAsync('titlecase24@scalehaus.io', 'dsfdsfdsf345')
+  await Users.confirmUserAsync(
+    'titlecase24@scalehaus.io',
+    user2.data.confirmToken
+  )
 
-        t.equal(user.data.emailConfirmed, true, 'email should be confirmed')
-        t.equal(user.data.changeToken.length, 60, 'should have change token')
-        t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
+  const res = await post('/auth/change-password-request', postData)
 
-        t.end()
-      })
-    })
-  })
+  t.is(res.statusCode, 200)
+
+  var data = JSON.parse(res.body)
+  t.ok(data.success, 'should succeed')
+  t.is(data.message, 'Change password request received. Check email for confirmation link.')
+
+
+  const user = await Users.findUserAsync(postData.email)
+
+  t.is(user.data.emailConfirmed, true, 'email should be confirmed')
+  t.is(user.data.changeToken.length, 60, 'should have change token')
+  t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
+
 })
 
-test('Auth: Change Password Request: will create confirmed user', t => {
-  var postData = {email: 'unknownuser@scalehaus.io', changeUrl: 'http://example.com/change'}
 
-  post('/auth/change-password-request', postData, (err, res) => {
-    t.ifError(err, 'should not error')
+test('Auth: Change Password Request: will create confirmed user', async (t) => {
+  var postData = {
+    email: 'unknownuser@scalehaus.io',
+    changeUrl: 'http://example.com/change'
+  }
 
-    t.equal(res.statusCode, 200)
+  Users.reset()
 
-    var data = JSON.parse(res.body)
-    t.ok(data.success, 'should succeed')
-    t.equal(data.message, 'Change password request received. Check email for confirmation link.')
+  const user2 = await Users.createUserAsync('titlecase24@scalehaus.io', 'dsfdsfdsf345')
+  await Users.confirmUserAsync(
+    'titlecase24@scalehaus.io',
+    user2.data.confirmToken
+  )
 
-    Users.createUser(postData.email, '', (err2, user2) => {
-      Users.findUser(postData.email, function (err, user) {
-        t.ifError(err, 'should not error')
+  const res = await post('/auth/change-password-request', postData)
 
-        t.equal(user.data.emailConfirmed, true, 'email should be confirmed')
-        t.equal(user.data.changeToken.length, 60, 'should have change token')
-        t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
+  t.is(res.statusCode, 200)
 
-        t.end()
-      })
-    })
-  })
+  var data = JSON.parse(res.body)
+  t.ok(data.success, 'should succeed')
+  t.is(data.message, 'Change password request received. Check email for confirmation link.')
+
+
+  const user = await Users.findUserAsync(postData.email)
+
+  t.is(user.data.emailConfirmed, true, 'email should be confirmed')
+  t.is(user.data.changeToken.length, 60, 'should have change token')
+  t.ok(user.data.changeExpires > Date.now(), 'should have changeExpires')
+
 })
 
-test('Auth: Change Password Request: sendEmail should get email options', function (t) {
+test('Auth: Change Password Request: sendEmail should get email options', async (t) => {
   var postData = {
     email: 'email@scalehaus.io',
     changeUrl: 'http://example.com/change',
@@ -315,100 +387,140 @@ test('Auth: Change Password Request: sendEmail should get email options', functi
     html: '<h1>Change PW</h1><p><a href="{{changeUrl}}">Change</a></p>'
   }
 
-  post('/auth/change-password-request', postData, function (err, res) {
-    t.ifError(err, 'should not error')
-    t.equal(res.statusCode, 200)
+  Users.reset()
 
-    t.equal(lastEmail.from, postData.from, 'should have from')
-    t.equal(lastEmail.subject, postData.subject, 'should have subject')
-    t.equal(lastEmail.html, postData.html, 'should have html')
+  const user2 = await Users.createUserAsync('email@scalehaus.io', 'dsfdsfdsf345')
+  await Users.confirmUserAsync(
+    'email@scalehaus.io',
+    user2.data.confirmToken
+  )
 
-    t.end()
-  })
+  const res = await post('/auth/change-password-request', postData)
+
+  t.is(res.statusCode, 200)
+
+  var data = JSON.parse(res.body)
+
+  t.ok(data.success, 'should succeed')
+  t.is(data.message, 'Change password request received. Check email for confirmation link.')
+
+  t.is(lastEmail.from, postData.from, 'should have from')
+  t.is(lastEmail.subject, postData.subject, 'should have subject')
+  t.is(lastEmail.html, postData.html, 'should have html')
+
 })
 
-test('Auth: Change Password: should error with wrong token', function (t) {
+test('Auth: Change Password: should error with wrong token', async (t) => {
   var postData = {
     email: 'david@scalehaus.io',
     changeToken: 'wrong token',
     password: 'newpass'
   }
 
-  post('/auth/change-password', postData, function (err, res) {
-    t.ifError(err, 'should not error')
+  Users.reset()
 
-    t.equal(res.statusCode, 401)
+  const user2 = await Users.createUserAsync(
+    'david@scalehaus.io',
+    'dsfdsfdsf345'
+  )
 
-    var data = JSON.parse(res.body)
-    t.equal(data.success, false, 'should not succeed')
-    t.equal(data.error, 'Token Mismatch', 'should have error')
-    t.notOk((data.data || {}).authToken, 'should not have token')
+  await Users.confirmUserAsync(
+    'david@scalehaus.io',
+    user2.data.confirmToken
+  )
 
-    t.end()
-  })
+  await post(
+    '/auth/change-password-request', {
+      email: 'david@scalehaus.io',
+      changeUrl: 'http://example.com/change'
+    }
+  )
+
+  const res = await post(
+    '/auth/change-password',
+    postData
+  )
+
+  t.is(res.statusCode, 401)
+
+  var data = JSON.parse(res.body)
+  t.is(data.success, false, 'should not succeed')
+  t.is(data.error, 'Token Mismatch', 'should have error')
+  t.notOk((data.data || {}).authToken, 'should not have token')
+
 })
 
-test('Auth: Change Password: should change password and login', function (t) {
-  Users.createUser('david@scalehaus.io', '', (err2, user) => {
-    Users.findUser('david@scalehaus.io', function (err, user) {
-      t.ifError(err, 'should not error')
 
-      var postData = {
-        email: 'david@scalehaus.io',
-        changeToken: user.data.changeToken,
-        password: 'newpass'
-      }
+test('Auth: Change Password: should change password and login', async (t) => {
+  Users.reset()
 
-      post('/auth/change-password', postData, function (err, res) {
-        t.ifError(err, 'should not error')
+  const u = await Users.createUserAsync(
+    'david@scalehaus.io',
+    'dsfdsfdsf345'
+  )
 
-        t.equal(res.statusCode, 200)
+  await Users.confirmUserAsync(
+    'david@scalehaus.io',
+    u.data.confirmToken
+  )
 
-        var data = JSON.parse(res.body)
-        t.equal(data.success, true, 'should succeed')
-        t.equal(data.message, 'Password changed.', 'should have message')
+  await post(
+    '/auth/change-password-request', {
+      email: 'david@scalehaus.io',
+      changeUrl: 'http://example.com/change'
+    }
+  )
 
-        Tokens.decode(data.data.authToken, function (err, payload) {
-          t.ifError(err, 'should not error')
+  const user = await Users.findUserAsync('david@scalehaus.io');
 
-          t.equal(payload.email, 'david@scalehaus.io', 'payload should have email')
-          t.ok(payload.iat, 'should have iat')
-          t.ok(payload.exp, 'should have exp')
-          t.end()
-        })
-      })
-    })
-  })
+  var postData = {
+    email: 'david@scalehaus.io',
+    changeToken: user.data.changeToken,
+    password: 'newpass'
+  }
+
+  const res = await post('/auth/change-password', postData)
+
+  t.is(res.statusCode, 200)
+
+  var data = JSON.parse(res.body)
+  t.is(data.success, true, 'should succeed')
+  t.is(data.message, 'Password changed.', 'should have message')
+
+  const payload = await Tokens.decodeAsync(data.data.authToken)
+
+  t.is(payload.email, 'david@scalehaus.io', 'payload should have email')
+  t.ok(payload.iat, 'should have iat')
+  t.ok(payload.exp, 'should have exp')
 })
 
-test('Auth: Change Password: should error with expired token', function (t) {
+
+test('Auth: Change Password: should error with expired token', async (t) => {
   var postData = {
     email: 'david@scalehaus.io',
     changeToken: 'expired token',
     password: 'newpass2'
   }
 
-  post('/auth/change-password', postData, function (err, res) {
-    t.ifError(err, 'should not error')
+  Users.reset()
 
-    t.equal(res.statusCode, 400)
+  const u = await Users.createUserAsync(
+    'david@scalehaus.io',
+    'dsfdsfdsf345'
+  )
 
-    var data = JSON.parse(res.body)
-    t.equal(data.success, false, 'should not succeed')
-    t.equal(data.error, 'Token Expired', 'should have error')
-    t.notOk((data.data || {}).authToken, 'should not have token')
+  await Users.confirmUserAsync(
+    'david@scalehaus.io',
+    u.data.confirmToken
+  )
 
-    t.end()
-  })
+  const res = await post('/auth/change-password', postData)
+
+  t.is(res.statusCode, 400)
+
+  var data = JSON.parse(res.body)
+  t.is(data.success, false, 'should not succeed')
+  t.is(data.error, 'Token Expired', 'should have error')
+  t.notOk((data.data || {}).authToken, 'should not have token')
+
 })
-
-function post (url, data, cb) {
-  var opts = {
-    method: 'POST',
-    headers: {'content-type': 'application/json'}
-  }
-
-  servertest(createServer(auth), url, opts, cb).end(JSON.stringify(data))
-}
-
-function createServer (auth) { return http.createServer(auth) }

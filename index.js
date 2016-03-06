@@ -1,6 +1,5 @@
 var Corsify = require('corsify')
 var HttpHashRouter = require('http-hash-router')
-
 var API = require('./api')
 
 module.exports = function (opts) {
@@ -49,3 +48,4 @@ function checkInitErrors (opts) {
     throw new Error('Authentic: no "sendEmail" method given')
   }
 }
+

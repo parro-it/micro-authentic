@@ -2,7 +2,7 @@ var URL = require('url')
 var jsonBody = require('body/json')
 
 var Tokens = require('./tokens')
-var Users = require('./users')
+var Users = require('./users').default
 
 var clientErrors = {
   'User Exists': 400,
@@ -23,7 +23,7 @@ var API = module.exports = function (opts) {
 
   this.sendEmail = opts.sendEmail
   this.Tokens = Tokens(opts)
-  this.Users = Users(opts.db)
+  this.Users = new Users(opts.db)
 
   return this
 }
@@ -47,7 +47,7 @@ API.prototype.signup = function (req, res, opts, cb) {
     var pass = userData.password
     var confirmUrl = userData.confirmUrl
 
-    self.Users.createUser(email, pass, function (err, user) {
+    self.Users.createUser(email, pass, (err, user) => {
       if (err) {
         err.statusCode = clientErrors[err.message] || 500
         return cb(err)
@@ -95,7 +95,6 @@ API.prototype.confirm = function (req, res, opts, cb) {
 
     var email = userData.email
     var confirmToken = userData.confirmToken
-
     self.Users.confirmUser(email, confirmToken, function (err) {
       if (err) {
         err.statusCode = clientErrors[err.message] || 500
@@ -170,7 +169,9 @@ API.prototype.changePasswordRequest = function (req, res, opts, cb) {
       }
 
       var emailOpts = {}
-      Object.keys(userData).forEach(function (k) { emailOpts[k] = userData[k] })
+      Object.keys(userData).forEach(function (k) {
+        emailOpts[k] = userData[k]
+      })
 
       emailOpts.type = 'change-password-request'
       emailOpts.email = email
@@ -227,7 +228,7 @@ API.prototype.changePassword = function (req, res, opts, cb) {
 function parseBody (req, res, cb) {
   jsonBody(req, res, function (err, parsed) {
     if (typeof (parsed || {}).email === 'string') {
-      parsed.email = parsed.email.toLowerCase()
+      parsed.email = parsed.email
     }
     cb(err, parsed)
   })

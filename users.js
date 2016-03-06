@@ -1,18 +1,184 @@
-var crypto = require('crypto')
+import crypto from 'crypto'
 
-var Users = module.exports = function () {
-  if (!(this instanceof Users)) return new Users()
+let db = {}
 
-  this.db = this.adaptDB(require('./test/_fake-db'))
+export default class Users {
+  reset () {
+    db = {}
+  }
 
-  return this
+  createUserAsync (email, password) {
+    return new Promise((resolve, reject) =>
+      this.createUser(email, password, (err, res) => {
+        if (err) return reject(err)
+        resolve(res)
+      })
+    )
+  }
+
+  createUser (email, password, cb) {
+    if (!validEmail(email)) return cb(new Error('Invalid Email'))
+    if (!validPassword(password)) return cb(new Error('Invalid Password'))
+
+    this.findUser(email, function (err, user) {
+      if (!err && user) return cb(new Error('User Exists'))
+
+      generateToken(30, function (err, token) {
+        if (err) return cb(err)
+
+        var data = {
+          emailConfirmed: false,
+          confirmToken: token
+        }
+
+        const createdDate = new Date().toISOString()
+        const user2 =
+          db[email] =
+            { password, email, data, createdDate }
+
+        cb(null, user2)
+      })
+    })
+  }
+
+  confirmUserAsync (email, token) {
+    return new Promise((resolve, reject) =>
+      this.confirmUser(email, token, (err, res) => {
+        if (err) return reject(err)
+        resolve(res)
+      })
+    )
+  }
+
+  confirmUser (email, token, cb) {
+    this.findUser(email, function (err, user) {
+      if (err) return cb(err)
+
+      if (user.data.emailConfirmed === true) return cb(new Error('Already Confirmed'))
+      if (user.data.confirmToken !== token) return cb(new Error('Token Mismatch'))
+
+      user.data.emailConfirmed = true
+      user.data.confirmToken = undefined
+
+      db[email] = user
+      cb(null, user)
+    })
+  }
+
+  changePassword (email, password, token, cb) {
+    if (!token) return cb(new Error('Invalid Token'))
+    if (!validPassword(password)) return cb(new Error('Invalid Password'))
+
+    this.findUser(email, function (err, user) {
+      if (err) return cb(err)
+      if (!user.data.changeToken) return cb(new Error('Token Expired'))
+
+      if (user.data.changeToken !== token) return cb(new Error('Token Mismatch'))
+
+      if (!(user.data.changeExpires > Date.now())) {
+        return cb(new Error('Token Expired'))
+      }
+
+      user.data.changeToken = undefined
+      user.data.changeExpires = undefined
+      user.data.emailConfirmed = true
+      user.password = password
+
+      cb(null, user)
+    })
+  }
+
+  createChangeToken (email, expires, cb) {
+    var self = this
+
+    if (typeof expires === 'function') {
+      cb = expires
+      expires = Date.now() + 2 * 24 * 3600 * 1000
+    }
+
+    this.findUser(email, function (err, user) {
+      if (err) {
+        if (err.message === 'User Not Found') {
+          // Create user and try again
+          return self.createWithPasswordChange(email, expires, cb)
+        }
+        return cb(err)
+      }
+
+      generateToken(30, function (err, token) {
+        if (err) return cb(err)
+        if (user.data == null) user.data = {}
+
+        user.data.changeToken = token
+        user.data.changeExpires = expires
+
+        db[email] = user
+        cb(null, user)
+      })
+    })
+  }
+
+  createWithPasswordChange (email, expires, cb) {
+    var self = this
+
+    if (typeof expires === 'function') {
+      cb = expires
+      expires = Date.now() + 90 * 24 * 3600 * 1000
+    }
+
+    generateToken(16, function (err, pw) {
+      if (err) return cb(err)
+      self.createUser(email, pw, function (err, user) {
+        if (err) return cb(err)
+
+        self.confirmUser(email, user.data.confirmToken, function (err) {
+          if (err) return cb(err)
+
+          self.createChangeToken(email, expires, cb)
+        })
+      })
+    })
+  }
+
+  findUserAsync (email) {
+    return new Promise((resolve, reject) =>
+      this.findUser(email, (err, res) => {
+        if (err) return reject(err)
+        resolve(res)
+      })
+    )
+  }
+
+  findUser (email, cb) {
+    email = email || ''
+
+    if (email in db) {
+      return cb(null, db[email])
+    }
+
+    cb(new Error('User Not Found'))
+  }
+
+  checkPassword (email, pass, cb) {
+    email = email || ''
+    pass = pass || ''
+
+    if (email in db) {
+      const user = db[email]
+      if (user.password === pass) {
+        return cb(null, user)
+      }
+      return cb(new Error('Password Mismatch'))
+    }
+
+    return cb(new Error('User Not Found'))
+  }
 }
 
+/*
 Users.prototype.adaptDB = function (dbObj) {
   return {
-    checkPassword: (email, pass, cb) => {
-      cb(null, true)
-    },
+
     findUser: function (username, cb) {
       this.get(username, cb)
     },
@@ -38,7 +204,20 @@ Users.prototype.adaptDB = function (dbObj) {
           err.status = 404
         }
         if (!val) val = {data: {}}
-        cb(err, val)
+        if (typeof cb === 'function') {
+          cb(err, val)
+        } else {
+          if (err) {
+            console.log(
+              err
+            )
+          } else {
+            console.log(cb)
+            console.log(
+              new Error('!!!Key not found in database [' + key + ']').stack
+            )
+          }
+        }
       })
     },
     put: function (key, val, cb) {
@@ -46,157 +225,7 @@ Users.prototype.adaptDB = function (dbObj) {
     }
   }
 }
-
-Users.prototype.findUser = function (email, cb) {
-  email = email || ''
-  this.db.findUser(email.toLowerCase(), function (err, user) {
-    if (err && err.notFound) {
-      err = new Error('User Not Found')
-    }
-    cb(err, user)
-  })
-}
-
-Users.prototype.checkPassword = function (email, pass, cb) {
-  email = email || ''
-  pass = pass || ''
-  this.db.checkPassword(email.toLowerCase(), pass, function (err, user) {
-    if (err) {
-      if (err === 'password mismatch') {
-        err = new Error('Password Mismatch')
-      }
-      if (err === 'could not find user') {
-        err = new Error('User Not Found')
-      }
-      return cb(err)
-    }
-
-    return cb(null, user)
-  })
-}
-
-Users.prototype.createUser = function (email, password, cb) {
-  if (!validEmail(email)) return cb(new Error('Invalid Email'))
-  if (!validPassword(password)) return cb(new Error('Invalid Password'))
-
-  var self = this
-
-  this.findUser(email, function (err, user) {
-    if (!err && user) return cb(new Error('User Exists'))
-
-    generateToken(30, function (err, token) {
-      if (err) return cb(err)
-
-      var data = {emailConfirmed: false, confirmToken: token}
-
-      self.db.addUser(email, password, data, function (err) {
-        if (err) return cb(err)
-
-        self.findUser(email, cb)
-      })
-    })
-  })
-}
-
-Users.prototype.confirmUser = function (email, token, cb) {
-  var self = this
-  this.findUser(email, function (err, user) {
-    if (err) return cb(err)
-
-    if (user.data.emailConfirmed === true) return cb(new Error('Already Confirmed'))
-
-    if (user.data.confirmToken !== token) return cb(new Error('Token Mismatch'))
-
-    user.data.emailConfirmed = true
-    user.data.confirmToken = undefined
-
-    self.db.modifyUser(email, user.data, cb)
-  })
-}
-
-Users.prototype.changePassword = function (email, password, token, cb) {
-  if (!token) return cb(new Error('Invalid Token'))
-  if (!validPassword(password)) return cb(new Error('Invalid Password'))
-
-  var self = this
-
-  this.findUser(email, function (err, user) {
-    if (err) return cb(err)
-
-    if (!user.data.changeToken) return cb(new Error('Token Expired'))
-
-    if (user.data.changeToken !== token) return cb(new Error('Token Mismatch'))
-
-    if (!(user.data.changeExpires > Date.now())) {
-      return cb(new Error('Token Expired'))
-    }
-
-    self.db.changePassword(email, password, function (err) {
-      if (err) return cb(err)
-
-      user.data.changeToken = undefined
-      user.data.changeExpires = undefined
-      user.data.emailConfirmed = true
-
-      self.db.modifyUser(email, user.data, cb)
-    })
-  })
-}
-
-Users.prototype.createChangeToken = function (email, expires, cb) {
-  var self = this
-
-  if (typeof expires === 'function') {
-    cb = expires
-    expires = Date.now() + 2 * 24 * 3600 * 1000
-  }
-
-  this.findUser(email, function (err, user) {
-    if (err) {
-      if (err.message === 'User Not Found') {
-        // Create user and try again
-        return self.createWithPasswordChange(email, expires, cb)
-      }
-      return cb(err)
-    }
-
-    generateToken(30, function (err, token) {
-      if (err) return cb(err)
-      if (user.data == null) user.data = {}
-
-      user.data.changeToken = token
-      user.data.changeExpires = expires
-
-      self.db.modifyUser(email, user.data, function (err) {
-        if (err) return cb(err)
-
-        cb(null, token)
-      })
-    })
-  })
-}
-
-Users.prototype.createWithPasswordChange = function (email, expires, cb) {
-  var self = this
-
-  if (typeof expires === 'function') {
-    cb = expires
-    expires = Date.now() + 90 * 24 * 3600 * 1000
-  }
-
-  generateToken(16, function (err, pw) {
-    if (err) return cb(err)
-    self.createUser(email, pw, function (err, user) {
-      if (err) return cb(err)
-
-      self.confirmUser(email, user.data.confirmToken, function (err) {
-        if (err) return cb(err)
-
-        self.createChangeToken(email, expires, cb)
-      })
-    })
-  })
-}
+*/
 
 function generateToken (len, encoding, cb) {
   len = len || 1

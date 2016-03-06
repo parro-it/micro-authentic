@@ -1,7 +1,7 @@
 {
   "name": "micro-authentic",
   "version": "1.0.0",
-  "description": "Adaptation of authentic-serverthat work with micro.",
+  "description": "Adaptation of authentic-server that work with micro.",
   "scripts": {
     "test": "ava --serial && standard"
   },

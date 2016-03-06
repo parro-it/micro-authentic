@@ -159,6 +159,15 @@ export default class Users {
     cb(new Error('User Not Found'))
   }
 
+  checkPasswordAsync (email, pass) {
+    return new Promise((resolve, reject) =>
+      this.checkPassword(email, pass, (err, res) => {
+        if (err) return reject(err)
+        resolve(res)
+      })
+    )
+  }
+
   checkPassword (email, pass, cb) {
     email = email || ''
     pass = pass || ''

@@ -19,7 +19,8 @@
     "http-hash-router": "^1.1.0",
     "jsonwebtoken": "^5.4.1",
     "level": "^1.3.0",
-    "micro": "^2.0.0"
+    "micro": "^2.0.0",
+    "pify": "^2.3.0"
   },
   "devDependencies": {
     "ava": "^0.12.0",
@@ -45,7 +46,8 @@
     ],
     "plugins": [
       "syntax-async-functions",
-      "transform-async-to-generator"
+      "transform-async-to-generator",
+      "transform-runtime"
     ]
   },
   "eslintConfig": {

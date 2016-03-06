@@ -8,12 +8,13 @@ var servertest = require('servertest')
 var Authentic = require('../')
 
 import UsersClass from '../users'
+import Tokens from '../tokens'
 
 const Users = new UsersClass()
 var publicKey = fs.readFileSync(__dirname + '/fixtures/rsa-public.pem')
 var privateKey = fs.readFileSync(__dirname + '/fixtures/rsa-private.pem')
 
-var Tokens = require('../tokens')({
+const tokens = new Tokens({
   publicKey: publicKey,
   privateKey: privateKey
 })
@@ -199,7 +200,7 @@ test('Auth: Confirm: should confirm user', async (t) => {
   var data = JSON.parse(res.body)
   t.is(data.success, true, 'should succeed')
   t.is(data.message, 'User confirmed.', 'should have message')
-  const payload = await Tokens.decodeAsync(data.data.authToken)
+  const payload = await tokens.decodeAsync(data.data.authToken)
   t.is(payload.email, '333david@scalehaus.io', 'payload should have email')
   t.ok(payload.iat, 'should have iat')
 })
@@ -276,7 +277,7 @@ test('Auth: Login: should login', async (t) => {
   t.is(data.success, true, 'should succeed', 'should succeed')
   t.is(data.message, 'Login successful.', 'should have message')
 
-  const payload = await Tokens.decodeAsync(data.data.authToken)
+  const payload = await tokens.decodeAsync(data.data.authToken)
 
   t.is(payload.email, 'david@scalehaus.io', 'payload should have email')
   t.ok(payload.iat, 'should have iat')
@@ -487,7 +488,7 @@ test('Auth: Change Password: should change password and login', async (t) => {
   t.is(data.success, true, 'should succeed')
   t.is(data.message, 'Password changed.', 'should have message')
 
-  const payload = await Tokens.decodeAsync(data.data.authToken)
+  const payload = await tokens.decodeAsync(data.data.authToken)
 
   t.is(payload.email, 'david@scalehaus.io', 'payload should have email')
   t.ok(payload.iat, 'should have iat')

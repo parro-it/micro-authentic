@@ -1,8 +1,8 @@
 var URL = require('url')
 var jsonBody = require('body/json')
 
-var Tokens = require('./tokens')
-var Users = require('./users').default
+import Tokens from './tokens'
+import Users from './users'
 
 var clientErrors = {
   'User Exists': 400,
@@ -22,7 +22,7 @@ var API = module.exports = function (opts) {
   if (!(this instanceof API)) return new API(opts)
 
   this.sendEmail = opts.sendEmail
-  this.Tokens = Tokens(opts)
+  this.tokens = new Tokens(opts)
   this.Users = new Users(opts.db)
 
   return this
@@ -32,7 +32,7 @@ API.prototype.publicKey = function (req, res, opts, cb) {
   res.end(JSON.stringify({
     success: true,
     data: {
-      publicKey: this.Tokens.publicKey
+      publicKey: this.tokens.publicKey
     }
   }))
 }
@@ -101,7 +101,7 @@ API.prototype.confirm = function (req, res, opts, cb) {
         return cb(err)
       }
 
-      var token = self.Tokens.encode(email)
+      var token = self.tokens.encode(email)
       res.writeHead(202, {'Content-Type': 'application/json'})
       res.end(JSON.stringify({
         success: true,
@@ -136,7 +136,7 @@ API.prototype.login = function (req, res, opts, cb) {
         return cb(err)
       }
 
-      var token = self.Tokens.encode(email)
+      var token = self.tokens.encode(email)
       res.writeHead(202, {'Content-Type': 'application/json'})
       res.end(JSON.stringify({
         success: true,
@@ -210,7 +210,7 @@ API.prototype.changePassword = function (req, res, opts, cb) {
       self.Users.checkPassword(email, password, function (err, user) {
         if (err) return cb(err)
 
-        var authToken = self.Tokens.encode(email)
+        var authToken = self.tokens.encode(email)
 
         res.writeHead(200, {'Content-Type': 'application/json'})
         res.end(JSON.stringify({

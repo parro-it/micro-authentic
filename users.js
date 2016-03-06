@@ -175,58 +175,6 @@ export default class Users {
   }
 }
 
-/*
-Users.prototype.adaptDB = function (dbObj) {
-  return {
-
-    findUser: function (username, cb) {
-      this.get(username, cb)
-    },
-    modifyUser (username, data, cb) {
-      this.put(username, data, cb)
-    },
-    addUser: function (username, password, data, cb) {
-      const createdDate = new Date()
-      this.put(username, {
-        username,
-        email: username,
-        password,
-        data,
-        createdDate
-      }, cb)
-    },
-    get: function (key, cb) {
-      dbObj.get(key, function (err, val) {
-        if (err) return cb(err)
-        if (val === undefined) {
-          err = new Error('Key not found in database [' + key + ']')
-          err.notFound = true
-          err.status = 404
-        }
-        if (!val) val = {data: {}}
-        if (typeof cb === 'function') {
-          cb(err, val)
-        } else {
-          if (err) {
-            console.log(
-              err
-            )
-          } else {
-            console.log(cb)
-            console.log(
-              new Error('!!!Key not found in database [' + key + ']').stack
-            )
-          }
-        }
-      })
-    },
-    put: function (key, val, cb) {
-      dbObj.put(key, val, cb)
-    }
-  }
-}
-*/
-
 function generateToken (len, encoding, cb) {
   len = len || 1
   if (typeof encoding === 'function') {

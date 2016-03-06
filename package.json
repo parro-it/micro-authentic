@@ -2,8 +2,9 @@
   "name": "micro-authentic",
   "version": "1.0.0",
   "description": "Adaptation of authentic-server that work with micro.",
+  "repository": "parro-it/micro-authentic",
   "scripts": {
-    "test": "ava --serial && standard"
+    "test": "ava --serial && eslint ."
   },
   "keywords": [
     "micro",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "ava": "^0.12.0",
+    "babel-eslint": "^5.0.0",
     "babel-plugin-module-alias": "^1.2.0",
     "babel-plugin-syntax-async-functions": "^6.5.0",
     "babel-plugin-transform-async-to-generator": "^6.5.0",
@@ -31,21 +33,36 @@
     "babel-register": "^6.6.5",
     "babel-runtime": "^6.6.1",
     "bl": "^1.0.0",
+    "eslint": "^2.3.0",
+    "eslint-config-standard": "^5.1.0",
+    "eslint-plugin-promise": "^1.1.0",
+    "eslint-plugin-standard": "^1.3.2",
     "servertest": "^1.2.1",
-    "standard": "^5.3.1",
     "tape": "^4.2.2"
   },
   "babel": {
-    "presets": ["babel-preset-es2015"],
+    "presets": [
+      "babel-preset-es2015"
+    ],
     "plugins": [
       "syntax-async-functions",
       "transform-async-to-generator"
-
     ]
   },
-  "boh":["transform-runtime",
-      ["module-alias", [
-        { "src": "path", "expose": "babel-runtime" }
-      ]]],
-  "repository": "parro-it/micro-authentic"
+  "eslintConfig": {
+    "parser": "babel-eslint",
+    "extends": [
+      "standard"
+    ],
+    "plugins": [
+      "promise"
+    ],
+    "env": {
+      "es6": true
+    },
+    "parserOptions": {
+      "sourceType": "module",
+      "ecmaVersion": 6
+    }
+  }
 }

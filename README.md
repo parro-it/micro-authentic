@@ -4,6 +4,12 @@ Adaptation of [authentic-server](https://github.com/davidguttman/authentic-serve
 
 [authentic-server](https://github.com/davidguttman/authentic-server.git) is the server component of [authentic](https://github.com/davidguttman/authentic). It provides endpoints for signup, login, confirm, and password change.
 
+
+[![Travis Build Status](https://img.shields.io/travis/parro-it/micro-authentic.svg)](http://travis-ci.org/parro-it/micro-authentic)
+[![NPM module](https://img.shields.io/npm/v/micro-authentic.svg)](https://npmjs.org/package/micro-authentic)
+[![NPM downloads](https://img.shields.io/npm/dt/micro-authentic.svg)](https://npmjs.org/package/micro-authentic)
+
+
 ## Example ##
 
 ```js

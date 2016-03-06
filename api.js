@@ -24,7 +24,6 @@ export default class API {
     this.Users = new Users(opts.db)
   }
 
-
   publicKey (req, res, opts, cb) {
     res.end(JSON.stringify({
       success: true,

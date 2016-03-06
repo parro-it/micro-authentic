@@ -1,13 +1,13 @@
-var Corsify = require('corsify')
-var HttpHashRouter = require('http-hash-router')
-var API = require('./api')
+import Corsify from 'corsify'
+import HttpHashRouter from 'http-hash-router'
+import API from './api'
 
-module.exports = function (opts) {
+export default function (opts) {
   checkInitErrors(opts)
 
   var routePrefix = opts.routePrefix || '/auth'
 
-  var api = API(opts)
+  var api = new API(opts)
 
   var router = HttpHashRouter()
   router.set(routePrefix + '/login', {POST: api.login.bind(api)})

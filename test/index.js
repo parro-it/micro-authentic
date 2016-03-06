@@ -1,18 +1,15 @@
 import 'babel-register'
-
-var fs = require('fs')
-var http = require('http')
-var test = require('ava')
-var servertest = require('servertest')
-
-var Authentic = require('../')
-
+import fs from 'fs'
+import http from 'http'
+import test from 'ava'
+import servertest from 'servertest'
+import Authentic from '../'
 import UsersClass from '../users'
 import Tokens from '../tokens'
 
 const Users = new UsersClass()
-var publicKey = fs.readFileSync(__dirname + '/fixtures/rsa-public.pem')
-var privateKey = fs.readFileSync(__dirname + '/fixtures/rsa-private.pem')
+const publicKey = fs.readFileSync(__dirname + '/fixtures/rsa-public.pem')
+const privateKey = fs.readFileSync(__dirname + '/fixtures/rsa-private.pem')
 
 const tokens = new Tokens({
   publicKey: publicKey,
@@ -21,7 +18,7 @@ const tokens = new Tokens({
 
 let lastEmail
 
-var auth = Authentic({
+const auth = Authentic({
   publicKey: publicKey,
   privateKey: privateKey,
   sendEmail: function (email, cb) {

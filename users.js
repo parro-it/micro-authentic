@@ -41,38 +41,26 @@ export default class Users {
     user.data.confirmToken = undefined
 
     db[email] = user
+
+    return user
   }
 
-  changePasswordAsync (email, password, token) {
-    return new Promise((resolve, reject) =>
-      this._changePassword(email, password, token, (err, res) => {
-        if (err) return reject(err)
-        resolve(res)
-      })
-    )
-  }
+  async changePasswordAsync (email, password, token) {
+    if (!token) throw new Error('Invalid Token')
+    if (!validPassword(password)) throw new Error('Invalid Password')
 
-  _changePassword (email, password, token, cb) {
-    if (!token) return cb(new Error('Invalid Token'))
-    if (!validPassword(password)) return cb(new Error('Invalid Password'))
+    const user = await this.findUserAsync(email)
 
-    this._findUser(email, function (err, user) {
-      if (err) return cb(err)
-      if (!user.data.changeToken) return cb(new Error('Token Expired'))
+    if (!user.data.changeToken) throw new Error('Token Expired')
+    if (user.data.changeToken !== token) throw new Error('Token Mismatch')
+    if (!(user.data.changeExpires > Date.now())) throw new Error('Token Expired')
 
-      if (user.data.changeToken !== token) return cb(new Error('Token Mismatch'))
+    user.data.changeToken = undefined
+    user.data.changeExpires = undefined
+    user.data.emailConfirmed = true
+    user.password = password
 
-      if (!(user.data.changeExpires > Date.now())) {
-        return cb(new Error('Token Expired'))
-      }
-
-      user.data.changeToken = undefined
-      user.data.changeExpires = undefined
-      user.data.emailConfirmed = true
-      user.password = password
-
-      cb(null, user)
-    })
+    return user
   }
 
   createChangeTokenAsync (email, expires) {

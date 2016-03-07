@@ -31,28 +31,16 @@ export default class Users {
     return newUser
   }
 
-  confirmUserAsync (email, token) {
-    return new Promise((resolve, reject) =>
-      this._confirmUser(email, token, (err, res) => {
-        if (err) return reject(err)
-        resolve(res)
-      })
-    )
-  }
+  async confirmUserAsync (email, token) {
+    const user = await this.findUserAsync(email)
 
-  _confirmUser (email, token, cb) {
-    this._findUser(email, function (err, user) {
-      if (err) return cb(err)
+    if (user.data.emailConfirmed === true) throw new Error('Already Confirmed')
+    if (user.data.confirmToken !== token) throw new Error('Token Mismatch')
 
-      if (user.data.emailConfirmed === true) return cb(new Error('Already Confirmed'))
-      if (user.data.confirmToken !== token) return cb(new Error('Token Mismatch'))
+    user.data.emailConfirmed = true
+    user.data.confirmToken = undefined
 
-      user.data.emailConfirmed = true
-      user.data.confirmToken = undefined
-
-      db[email] = user
-      cb(null, user)
-    })
+    db[email] = user
   }
 
   changePasswordAsync (email, password, token) {

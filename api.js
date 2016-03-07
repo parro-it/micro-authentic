@@ -43,7 +43,6 @@ export default class API {
 
     try {
       const user = await self.Users.createUserAsync(email, pass)
-
       if (confirmUrl) {
         var urlObj = URL.parse(confirmUrl, true)
         urlObj.query.confirmToken = user.data.confirmToken
@@ -187,27 +186,24 @@ export default class API {
     var password = userData.password
     var changeToken = userData.changeToken
 
-    self.Users.changePassword(email, password, changeToken, function (err, something) {
-      if (err) {
-        err.statusCode = clientErrors[err.message] || 500
-        return cb(err)
-      }
+    try {
+      await self.Users.changePasswordAsync(email, password, changeToken)
+      await self.Users.checkPasswordAsync(email, password)
 
-      self.Users.checkPassword(email, password, function (err, user) {
-        if (err) return cb(err)
+      var authToken = self.tokens.encode(email)
 
-        var authToken = self.tokens.encode(email)
-
-        res.writeHead(200, {'Content-Type': 'application/json'})
-        res.end(JSON.stringify({
-          success: true,
-          message: 'Password changed.',
-          data: {
-            authToken: authToken
-          }
-        }))
-      })
-    })
+      res.writeHead(200, {'Content-Type': 'application/json'})
+      res.end(JSON.stringify({
+        success: true,
+        message: 'Password changed.',
+        data: {
+          authToken: authToken
+        }
+      }))
+    } catch (err) {
+      err.statusCode = err.statusCode || clientErrors[err.message] || 500
+      return cb(err)
+    }
   }
 }
 

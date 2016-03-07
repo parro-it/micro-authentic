@@ -7,51 +7,41 @@ export default class Users {
     db = {}
   }
 
-  createUserAsync (email, password) {
-    return new Promise((resolve, reject) =>
-      this.createUser(email, password, (err, res) => {
-        if (err) return reject(err)
-        resolve(res)
-      })
-    )
-  }
+  async createUserAsync (email, password) {
+    if (!validEmail(email)) throw new Error('Invalid Email')
+    if (!validPassword(password)) throw new Error('Invalid Password')
 
-  createUser (email, password, cb) {
-    if (!validEmail(email)) return cb(new Error('Invalid Email'))
-    if (!validPassword(password)) return cb(new Error('Invalid Password'))
+    let user
+    try {
+      user = await this.findUserAsync(email)
+    } catch (err) {
+      // ignore
+    }
+    if (user) throw new Error('User Exists')
 
-    this.findUser(email, function (err, user) {
-      if (!err && user) return cb(new Error('User Exists'))
+    const token = await generateToken(30)
 
-      generateToken(30, function (err, token) {
-        if (err) return cb(err)
+    var data = {
+      emailConfirmed: false,
+      confirmToken: token
+    }
 
-        var data = {
-          emailConfirmed: false,
-          confirmToken: token
-        }
-
-        const createdDate = new Date().toISOString()
-        const user2 =
-          db[email] =
-            { password, email, data, createdDate }
-
-        cb(null, user2)
-      })
-    })
+    const createdDate = new Date().toISOString()
+    const newUser = db[email] = { password, email, data, createdDate }
+    return newUser
   }
 
   confirmUserAsync (email, token) {
     return new Promise((resolve, reject) =>
-      this.confirmUser(email, token, (err, res) => {
+      this._confirmUser(email, token, (err, res) => {
         if (err) return reject(err)
         resolve(res)
       })
     )
   }
 
-  confirmUser (email, token, cb) {
-    this.findUser(email, function (err, user) {
+  _confirmUser (email, token, cb) {
+    this._findUser(email, function (err, user) {
       if (err) return cb(err)
 
       if (user.data.emailConfirmed === true) return cb(new Error('Already Confirmed'))
@@ -65,20 +55,20 @@ export default class Users {
     })
   }
 
-  changePasswordAsync (email, password) {
+  changePasswordAsync (email, password, token) {
     return new Promise((resolve, reject) =>
-      this.changePassword(email, password, (err, res) => {
+      this._changePassword(email, password, token, (err, res) => {
         if (err) return reject(err)
         resolve(res)
       })
     )
   }
 
-  changePassword (email, password, token, cb) {
+  _changePassword (email, password, token, cb) {
     if (!token) return cb(new Error('Invalid Token'))
     if (!validPassword(password)) return cb(new Error('Invalid Password'))
 
-    this.findUser(email, function (err, user) {
+    this._findUser(email, function (err, user) {
       if (err) return cb(err)
       if (!user.data.changeToken) return cb(new Error('Token Expired'))
 
@@ -99,17 +89,17 @@ export default class Users {
 
   createChangeTokenAsync (email, expires) {
     return new Promise((resolve, reject) =>
-      this.createChangeToken(email, expires, (err, res) => {
+      this._createChangeToken(email, expires, (err, res) => {
         if (err) return reject(err)
         resolve(res)
       })
     )
   }
 
-  createChangeToken (email, expires = Date.now() + 2 * 24 * 3600 * 1000, cb) {
+  _createChangeToken (email, expires = Date.now() + 2 * 24 * 3600 * 1000, cb) {
     var self = this
 
-    this.findUser(email, function (err, user) {
+    this._findUser(email, function (err, user) {
       if (err) {
         if (err.message === 'User Not Found') {
           // Create user and try again
@@ -139,30 +129,28 @@ export default class Users {
       expires = Date.now() + 90 * 24 * 3600 * 1000
     }
 
-    generateToken(16, function (err, pw) {
+    generateToken(16, async function (err, pw) {
       if (err) return cb(err)
-      self.createUser(email, pw, function (err, user) {
-        if (err) return cb(err)
-
-        self.confirmUser(email, user.data.confirmToken, function (err) {
-          if (err) return cb(err)
-
-          self.createChangeToken(email, expires, cb)
-        })
-      })
+      try {
+        const user = await self.createUserAsync(email, pw)
+        await self.confirmUserAsync(email, user.data.confirmToken)
+        self._createChangeToken(email, expires, cb)
+      } catch (err) {
+        cb(err)
+      }
     })
   }
 
   findUserAsync (email) {
     return new Promise((resolve, reject) =>
-      this.findUser(email, (err, res) => {
+      this._findUser(email, (err, res) => {
         if (err) return reject(err)
         resolve(res)
       })
     )
   }
 
-  findUser (email, cb) {
+  _findUser (email, cb) {
     email = email || ''
 
     if (email in db) {
@@ -174,14 +162,14 @@ export default class Users {
 
   checkPasswordAsync (email, pass) {
     return new Promise((resolve, reject) =>
-      this.checkPassword(email, pass, (err, res) => {
+      this._checkPassword(email, pass, (err, res) => {
         if (err) return reject(err)
         resolve(res)
       })
     )
   }
 
-  checkPassword (email, pass, cb) {
+  _checkPassword (email, pass, cb) {
     email = email || ''
     pass = pass || ''
 
@@ -205,8 +193,15 @@ function generateToken (len, encoding, cb) {
   }
   encoding = encoding || 'hex'
 
-  crypto.randomBytes(len, function (ex, buf) {
-    cb(null, buf.toString(encoding))
+  return new Promise((resolve, reject) => {
+    crypto.randomBytes(len, function (ex, buf) {
+      const tk = buf.toString(encoding)
+      if (cb) {
+        cb(null, tk)
+      } else {
+        resolve(tk)
+      }
+    })
   })
 }
 

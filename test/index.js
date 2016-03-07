@@ -1,16 +1,16 @@
 import 'babel-register'
 import fs from 'fs'
-import http from 'http'
 import test from 'ava'
-import servertest from 'servertest'
-import Authentic from '../'
-import UsersClass from '../users'
-import Tokens from '../tokens'
+import {withOptions as Authentic} from '../src'
+import UsersClass from '../src/users'
+import Tokens from '../src/tokens'
 import { join } from 'path'
+import listen from './_listen'
+import fetch from 'node-fetch'
 
 const Users = new UsersClass()
-const publicKey = fs.readFileSync(join(__dirname, '/fixtures/rsa-public.pem'))
-const privateKey = fs.readFileSync(join(__dirname, '/fixtures/rsa-private.pem'))
+const publicKey = fs.readFileSync(join(__dirname, 'fixtures/rsa-public.pem'))
+const privateKey = fs.readFileSync(join(__dirname, 'fixtures/rsa-private.pem'))
 
 const tokens = new Tokens({
   publicKey: publicKey,
@@ -19,58 +19,41 @@ const tokens = new Tokens({
 
 let lastEmail
 
-const auth = Authentic({
-  publicKey: publicKey,
-  privateKey: privateKey,
-  sendEmail: function (email, cb) {
-    lastEmail = email
-    setImmediate(cb)
-  }
-})
+async function post (url, data) {
+  const auth = Authentic({
+    publicKey: publicKey,
+    privateKey: privateKey,
+    sendEmail: async function (email) {
+      lastEmail = email
+    }
+  })
 
-function createServer (auth) {
-  return http.createServer(auth)
-}
+  const base = await listen(auth)
 
-function post (url, data) {
-  const opts = {
+  return await fetch(base + url, {
     method: 'POST',
-    headers: {'content-type': 'application/json'}
-  }
-
-  return new Promise((resolve, reject) => {
-    servertest(
-      createServer(auth),
-      url,
-      opts,
-      (err, res) => {
-        if (err) return reject(err)
-        resolve(res)
-      }
-    ).end(JSON.stringify(data))
+    body: JSON.stringify(data),
+    headers: {'Content-Type': 'application/json'}
   })
 }
 
-function get (url) {
-  const opts = { method: 'GET' }
-
-  return new Promise((resolve, reject) => {
-    servertest(
-      createServer(auth),
-      url,
-      opts,
-      (err, res) => {
-        if (err) return reject(err)
-        resolve(res)
-      }
-    )
+async function get (url) {
+  const auth = Authentic({
+    publicKey: publicKey,
+    privateKey: privateKey,
+    sendEmail: async function (email) {
+      lastEmail = email
+    }
   })
+
+  const base = await listen(auth)
+
+  return await fetch(base + url)
 }
 
 test('Auth: should get public-key', async (t) => {
-  const res = await get('/auth/public-key')
-  const data = JSON.parse(res.body)
-
+  const res = await get('/public-key')
+  const data = await res.json()
   t.is(data.success, true, 'should succeed')
   t.is(data.data.publicKey.length, 800, 'should have publicKey')
 })
@@ -82,10 +65,10 @@ test('Auth: Signup: should be able to sign up', async (t) => {
     confirmUrl: 'http://example.com/confirm'
   }
 
-  const res = await post('/auth/signup', postData)
-  t.is(res.statusCode, 201)
+  const res = await post('/signup', postData)
+  t.is(res.status, 201)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, true, 'should succeed')
   t.is(data.message, 'User created. Check email for confirmation link.', 'should have message')
   t.is(data.data.email, 'david@scalehaus.io', 'should have email')
@@ -103,10 +86,10 @@ test('Auth: Login: should fail without confirm', async (t) => {
     'swordfish'
   )
 
-  const res = await post('/auth/login', postData)
-  t.is(res.statusCode, 401)
+  const res = await post('/login', postData)
+  t.is(res.status, 401)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, false, 'should not succeed')
   t.is(data.error, 'User Not Confirmed', 'should have error')
 })
@@ -121,8 +104,8 @@ test('Auth: Signup: sendEmail should get email options', async (t) => {
     html: '<h1>Welcome</h1><p><a href="{{confirmUrl}}">Confirm</a></p>'
   }
 
-  const res = await post('/auth/signup', postData)
-  t.is(res.statusCode, 201)
+  const res = await post('/signup', postData)
+  t.is(res.status, 201)
 
   t.notOk(lastEmail.password, 'should not have password')
   t.is(lastEmail.from, postData.from, 'should have from')
@@ -143,11 +126,11 @@ test('Auth: Signup: should error for existing user', async (t) => {
     confirmUrl: 'http://example.com/confirm'
   }
 
-  const res = await post('/auth/signup', postData)
+  const res = await post('/signup', postData)
 
-  t.is(res.statusCode, 400)
+  t.is(res.status, 400)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.not(data.success, true, 'should not succeed')
   t.is(data.error, 'User Exists', 'should have error')
 })
@@ -158,11 +141,11 @@ test('Auth: Confirm: should error for mismatch', async (t) => {
     confirmToken: 'incorrect'
   }
 
-  const res = await post('/auth/confirm', postData)
+  const res = await post('/confirm', postData)
 
-  t.is(res.statusCode, 401)
+  t.is(res.status, 401)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, false, 'should not succeed')
   t.is(data.error, 'Token Mismatch')
 })
@@ -178,11 +161,11 @@ test('Auth: Confirm: should confirm user', async (t) => {
     confirmToken: user.data.confirmToken
   }
 
-  const res = await post('/auth/confirm', postData)
+  const res = await post('/confirm', postData)
 
-  t.is(res.statusCode, 202)
+  t.is(res.status, 202)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, true, 'should succeed')
   t.is(data.message, 'User confirmed.', 'should have message')
   const payload = await tokens.decodeAsync(data.data.authToken)
@@ -198,11 +181,11 @@ test('Auth: Login: should error for unknown user', async (t) => {
     password: 'not swordfish'
   }
 
-  const res = await post('/auth/login', postData)
+  const res = await post('/login', postData)
 
-  t.is(res.statusCode, 401)
+  t.is(res.status, 401)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, false, 'should not succeed')
   t.is(data.error, 'User Not Found', 'should have error message')
 })
@@ -223,11 +206,11 @@ test('Auth: Login: should error for wrong pass', async (t) => {
     user.data.confirmToken
   )
 
-  const res = await post('/auth/login', postData)
+  const res = await post('/login', postData)
 
-  t.is(res.statusCode, 401)
+  t.is(res.status, 401)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, false, 'should not succeed')
   t.is(data.error, 'Password Mismatch', 'should have error message')
 })
@@ -248,11 +231,11 @@ test('Auth: Login: should login', async (t) => {
     password: 'swordfish'
   }
 
-  const res = await post('/auth/login', postData)
+  const res = await post('/login', postData)
 
-  t.is(res.statusCode, 202)
+  t.is(res.status, 202)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, true, 'should succeed', 'should succeed')
   t.is(data.message, 'Login successful.', 'should have message')
 
@@ -276,11 +259,11 @@ test('Auth: Change Password Request', async (t) => {
     user2.data.confirmToken
   )
 
-  const res = await post('/auth/change-password-request', postData)
+  const res = await post('/change-password-request', postData)
 
-  t.is(res.statusCode, 200)
+  t.is(res.status, 200)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.ok(data.success, 'should succeed')
   t.is(data.message, 'Change password request received. Check email for confirmation link.')
 
@@ -304,11 +287,11 @@ test('Auth: Change Password Request should fix case', async (t) => {
     user2.data.confirmToken
   )
 
-  const res = await post('/auth/change-password-request', postData)
+  const res = await post('/change-password-request', postData)
 
-  t.is(res.statusCode, 200)
+  t.is(res.status, 200)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.ok(data.success, 'should succeed')
   t.is(data.message, 'Change password request received. Check email for confirmation link.')
 
@@ -333,11 +316,11 @@ test('Auth: Change Password Request: will create confirmed user', async (t) => {
     user2.data.confirmToken
   )
 
-  const res = await post('/auth/change-password-request', postData)
+  const res = await post('/change-password-request', postData)
 
-  t.is(res.statusCode, 200)
+  t.is(res.status, 200)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.ok(data.success, 'should succeed')
   t.is(data.message, 'Change password request received. Check email for confirmation link.')
 
@@ -365,11 +348,11 @@ test('Auth: Change Password Request: sendEmail should get email options', async 
     user2.data.confirmToken
   )
 
-  const res = await post('/auth/change-password-request', postData)
+  const res = await post('/change-password-request', postData)
 
-  t.is(res.statusCode, 200)
+  t.is(res.status, 200)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
 
   t.ok(data.success, 'should succeed')
   t.is(data.message, 'Change password request received. Check email for confirmation link.')
@@ -399,20 +382,20 @@ test('Auth: Change Password: should error with wrong token', async (t) => {
   )
 
   await post(
-    '/auth/change-password-request', {
+    '/change-password-request', {
       email: 'david@scalehaus.io',
       changeUrl: 'http://example.com/change'
     }
   )
 
   const res = await post(
-    '/auth/change-password',
+    '/change-password',
     postData
   )
 
-  t.is(res.statusCode, 401)
+  t.is(res.status, 401)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, false, 'should not succeed')
   t.is(data.error, 'Token Mismatch', 'should have error')
   t.notOk((data.data || {}).authToken, 'should not have token')
@@ -432,7 +415,7 @@ test('Auth: Change Password: should change password and login', async (t) => {
   )
 
   await post(
-    '/auth/change-password-request', {
+    '/change-password-request', {
       email: 'david@scalehaus.io',
       changeUrl: 'http://example.com/change'
     }
@@ -446,11 +429,11 @@ test('Auth: Change Password: should change password and login', async (t) => {
     password: 'newpass'
   }
 
-  const res = await post('/auth/change-password', postData)
+  const res = await post('/change-password', postData)
 
-  t.is(res.statusCode, 200)
+  t.is(res.status, 200)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, true, 'should succeed')
   t.is(data.message, 'Password changed.', 'should have message')
 
@@ -480,11 +463,11 @@ test('Auth: Change Password: should error with expired token', async (t) => {
     u.data.confirmToken
   )
 
-  const res = await post('/auth/change-password', postData)
+  const res = await post('/change-password', postData)
 
-  t.is(res.statusCode, 400)
+  t.is(res.status, 400)
 
-  var data = JSON.parse(res.body)
+  var data = await res.json()
   t.is(data.success, false, 'should not succeed')
   t.is(data.error, 'Token Expired', 'should have error')
   t.notOk((data.data || {}).authToken, 'should not have token')

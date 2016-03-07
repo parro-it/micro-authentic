@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import error from './error'
 
 let db = {}
 
@@ -8,8 +9,8 @@ export default class Users {
   }
 
   async createUserAsync (email, password) {
-    if (!validEmail(email)) throw new Error('Invalid Email')
-    if (!validPassword(password)) throw new Error('Invalid Password')
+    if (!validEmail(email)) error(400, 'Invalid Email')
+    if (!validPassword(password)) error(400, 'Invalid Password')
 
     let user
     try {
@@ -17,7 +18,7 @@ export default class Users {
     } catch (err) {
       // ignore
     }
-    if (user) throw new Error('User Exists')
+    if (user) error(400, 'User Exists')
 
     const token = await generateToken(30)
 
@@ -34,8 +35,8 @@ export default class Users {
   async confirmUserAsync (email, token) {
     const user = await this.findUserAsync(email)
 
-    if (user.data.emailConfirmed === true) throw new Error('Already Confirmed')
-    if (user.data.confirmToken !== token) throw new Error('Token Mismatch')
+    if (user.data.emailConfirmed === true) error(400, 'Already Confirmed')
+    if (user.data.confirmToken !== token) error(401, 'Token Mismatch')
 
     user.data.emailConfirmed = true
     user.data.confirmToken = undefined
@@ -46,13 +47,13 @@ export default class Users {
   }
 
   async changePasswordAsync (email, password, token) {
-    if (!token) throw new Error('Invalid Token')
-    if (!validPassword(password)) throw new Error('Invalid Password')
+    if (!token) error(500, 'Invalid Token')
+    if (!validPassword(password)) error(400, 'Invalid Password')
 
     const user = await this.findUserAsync(email)
-    if (!user.data.changeToken) throw new Error('Token Expired')
-    if (user.data.changeToken !== token) throw new Error('Token Mismatch')
-    if (!(user.data.changeExpires > Date.now())) throw new Error('Token Expired')
+    if (!user.data.changeToken) error(400, 'Token Expired')
+    if (user.data.changeToken !== token) error(401, 'Token Mismatch')
+    if (!(user.data.changeExpires > Date.now())) error(400, 'Token Expired')
 
     user.data.changeToken = undefined
     user.data.changeExpires = undefined
@@ -100,7 +101,7 @@ export default class Users {
       return Promise.resolve(db[email])
     }
 
-    return Promise.reject(new Error('User Not Found'))
+    return Promise.reject(error(401, 'User Not Found'))
   }
 
   async checkPasswordAsync (email, pass) {
@@ -112,10 +113,10 @@ export default class Users {
       if (user.password === pass) {
         return Promise.resolve(user)
       }
-      return Promise.reject(new Error('Password Mismatch'))
+      return Promise.reject(error(401, 'Password Mismatch'))
     }
 
-    return Promise.reject(new Error('User Not Found'))
+    return Promise.reject(error(401, 'User Not Found'))
   }
 }
 

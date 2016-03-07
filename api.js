@@ -43,6 +43,7 @@ export default class API {
 
     try {
       const user = await self.Users.createUserAsync(email, pass)
+
       if (confirmUrl) {
         var urlObj = URL.parse(confirmUrl, true)
         urlObj.query.confirmToken = user.data.confirmToken

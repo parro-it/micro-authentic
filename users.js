@@ -50,7 +50,6 @@ export default class Users {
     if (!validPassword(password)) throw new Error('Invalid Password')
 
     const user = await this.findUserAsync(email)
-
     if (!user.data.changeToken) throw new Error('Token Expired')
     if (user.data.changeToken !== token) throw new Error('Token Mismatch')
     if (!(user.data.changeExpires > Date.now())) throw new Error('Token Expired')
@@ -63,58 +62,37 @@ export default class Users {
     return user
   }
 
-  createChangeTokenAsync (email, expires) {
-    return new Promise((resolve, reject) =>
-      this._createChangeToken(email, expires, (err, res) => {
-        if (err) return reject(err)
-        resolve(res)
-      })
-    )
-  }
-
-  _createChangeToken (email, expires = Date.now() + 2 * 24 * 3600 * 1000, cb) {
+  async createChangeTokenAsync (email, expires = Date.now() + 90 * 24 * 3600 * 1000) {
     var self = this
 
-    this._findUser(email, function (err, user) {
-      if (err) {
-        if (err.message === 'User Not Found') {
-          // Create user and try again
-          return self.createWithPasswordChange(email, expires, cb)
-        }
-        return cb(err)
+    try {
+      const user = await this.findUserAsync(email)
+      const token = await generateToken(30)
+      if (user.data == null) user.data = {}
+
+      user.data.changeToken = token
+      user.data.changeExpires = expires
+
+      db[email] = user
+
+      return user
+    } catch (err) {
+      if (err.message === 'User Not Found') {
+        // Create user and try again
+        return await self.createWithPasswordChange(email, expires)
       }
-
-      generateToken(30, function (err, token) {
-        if (err) return cb(err)
-        if (user.data == null) user.data = {}
-
-        user.data.changeToken = token
-        user.data.changeExpires = expires
-
-        db[email] = user
-        cb(null, user)
-      })
-    })
-  }
-
-  createWithPasswordChange (email, expires, cb) {
-    var self = this
-
-    if (typeof expires === 'function') {
-      cb = expires
-      expires = Date.now() + 90 * 24 * 3600 * 1000
+      throw err
     }
+  }
 
-    generateToken(16, async function (err, pw) {
-      if (err) return cb(err)
-      try {
-        const user = await self.createUserAsync(email, pw)
-        await self.confirmUserAsync(email, user.data.confirmToken)
-        self._createChangeToken(email, expires, cb)
-      } catch (err) {
-        cb(err)
-      }
-    })
+  async createWithPasswordChange (email, expires) {
+    var self = this
+
+    const pw = await generateToken(16)
+    const user = await self.createUserAsync(email, pw)
+    await self.confirmUserAsync(email, user.data.confirmToken)
+    await self.createChangeTokenAsync(email, expires)
+    return user
   }
 
   findUserAsync (email) {

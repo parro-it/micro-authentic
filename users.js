@@ -95,66 +95,35 @@ export default class Users {
     return user
   }
 
-  findUserAsync (email) {
-    return new Promise((resolve, reject) =>
-      this._findUser(email, (err, res) => {
-        if (err) return reject(err)
-        resolve(res)
-      })
-    )
-  }
-
-  _findUser (email, cb) {
-    email = email || ''
-
+  async findUserAsync (email = '') {
     if (email in db) {
-      return cb(null, db[email])
+      return Promise.resolve(db[email])
     }
 
-    cb(new Error('User Not Found'))
+    return Promise.reject(new Error('User Not Found'))
   }
 
-  checkPasswordAsync (email, pass) {
-    return new Promise((resolve, reject) =>
-      this._checkPassword(email, pass, (err, res) => {
-        if (err) return reject(err)
-        resolve(res)
-      })
-    )
-  }
-
-  _checkPassword (email, pass, cb) {
+  async checkPasswordAsync (email, pass) {
     email = email || ''
     pass = pass || ''
 
     if (email in db) {
       const user = db[email]
       if (user.password === pass) {
-        return cb(null, user)
+        return Promise.resolve(user)
       }
-      return cb(new Error('Password Mismatch'))
+      return Promise.reject(new Error('Password Mismatch'))
     }
 
-    return cb(new Error('User Not Found'))
+    return Promise.reject(new Error('User Not Found'))
   }
 }
 
-function generateToken (len, encoding, cb) {
-  len = len || 1
-  if (typeof encoding === 'function') {
-    cb = encoding
-    encoding = 'hex'
-  }
-  encoding = encoding || 'hex'
-
+function generateToken (len = 1, encoding = 'hex') {
   return new Promise((resolve, reject) => {
     crypto.randomBytes(len, function (ex, buf) {
       const tk = buf.toString(encoding)
-      if (cb) {
-        cb(null, tk)
-      } else {
-        resolve(tk)
-      }
+      resolve(tk)
     })
   })
 }

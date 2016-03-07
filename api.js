@@ -144,8 +144,8 @@ export default class API {
     var email = userData.email
     var changeUrl = userData.changeUrl
 
-    self.Users.createChangeToken(email, function (err, changeToken) {
-      if (err) return cb(err)
+    try {
+      const changeToken = await self.Users.createChangeTokenAsync(email)
 
       if (changeUrl) {
         var urlObj = URL.parse(changeUrl, true)
@@ -173,7 +173,9 @@ export default class API {
           message: 'Change password request received. Check email for confirmation link.'
         }))
       })
-    })
+    } catch (err) {
+      return cb(err)
+    }
   }
 
   async changePassword (req, res, opts, cb) {

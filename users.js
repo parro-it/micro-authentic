@@ -65,6 +65,15 @@ export default class Users {
     })
   }
 
+  changePasswordAsync (email, password) {
+    return new Promise((resolve, reject) =>
+      this.changePassword(email, password, (err, res) => {
+        if (err) return reject(err)
+        resolve(res)
+      })
+    )
+  }
+
   changePassword (email, password, token, cb) {
     if (!token) return cb(new Error('Invalid Token'))
     if (!validPassword(password)) return cb(new Error('Invalid Password'))
@@ -88,13 +97,17 @@ export default class Users {
     })
   }
 
-  createChangeToken (email, expires, cb) {
-    var self = this
+  createChangeTokenAsync (email, expires) {
+    return new Promise((resolve, reject) =>
+      this.createChangeToken(email, expires, (err, res) => {
+        if (err) return reject(err)
+        resolve(res)
+      })
+    )
+  }
 
-    if (typeof expires === 'function') {
-      cb = expires
-      expires = Date.now() + 2 * 24 * 3600 * 1000
-    }
+  createChangeToken (email, expires = Date.now() + 2 * 24 * 3600 * 1000, cb) {
+    var self = this
 
     this.findUser(email, function (err, user) {
       if (err) {
